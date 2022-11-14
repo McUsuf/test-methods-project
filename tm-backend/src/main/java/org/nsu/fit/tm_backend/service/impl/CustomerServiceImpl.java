@@ -44,7 +44,9 @@ public class CustomerServiceImpl implements CustomerService {
         if (customer.pass.equalsIgnoreCase("123qwe")) {
             throw new IllegalArgumentException("Password is very easy.");
         }
-
+        if(lookupCustomer(customer.login)!=null && lookupCustomer(customer.login).login.equals(customer.login)){
+            throw new IllegalArgumentException("Login already used.");
+        }
         // Лабораторная 2: добавить код который бы проверял, что нет customer'а c таким же login (email'ом).
         // Попробовать добавить другие ограничения, посмотреть как быстро растет кодовая база тестов.
 
@@ -78,7 +80,6 @@ public class CustomerServiceImpl implements CustomerService {
                 .findFirst()
                 .orElse(null);
     }
-
     public ContactPojo me(AuthenticatedUserDetails authenticatedUserDetails) {
         ContactPojo contactPojo = new ContactPojo();
 

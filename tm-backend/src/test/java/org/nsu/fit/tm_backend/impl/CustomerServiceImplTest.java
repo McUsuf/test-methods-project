@@ -1,6 +1,10 @@
 package org.nsu.fit.tm_backend.impl;
 
-import java.util.UUID;
+import java.util.*;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -12,11 +16,8 @@ import org.nsu.fit.tm_backend.repository.Repository;
 import org.nsu.fit.tm_backend.repository.data.CustomerPojo;
 import org.nsu.fit.tm_backend.service.impl.CustomerServiceImpl;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 // Лабораторная 2: покрыть unit тестами класс CustomerServiceImpl на 100%.
 @ExtendWith(MockitoExtension.class)
@@ -27,23 +28,31 @@ class CustomerServiceImplTest {
     @InjectMocks
     private CustomerServiceImpl customerService;
 
-    @Test
-    void testCreateCustomer() {
-        // arrange: готовим входные аргументы и настраиваем mock'и.
-        CustomerPojo createCustomerInput = new CustomerPojo();
+    CustomerPojo createCustomerInput;
+    CustomerPojo createCustomerOutput;
+
+    @BeforeEach
+    public void initEach(){
+        createCustomerInput = new CustomerPojo();
         createCustomerInput.firstName = "John";
         createCustomerInput.lastName = "Wick";
         createCustomerInput.login = "john_wick@example.com";
-        createCustomerInput.pass = "Baba_Jaga";
+        createCustomerInput.pass = "1234567";
         createCustomerInput.balance = 0;
 
-        CustomerPojo createCustomerOutput = new CustomerPojo();
+        createCustomerOutput = new CustomerPojo();
         createCustomerOutput.id = UUID.randomUUID();
         createCustomerOutput.firstName = "John";
         createCustomerOutput.lastName = "Wick";
         createCustomerOutput.login = "john_wick@example.com";
         createCustomerOutput.pass = "Baba_Jaga";
         createCustomerOutput.balance = 0;
+    }
+
+    @Test
+    void testCreateCustomer() {
+        // arrange: готовим входные аргументы и настраиваем mock'и.
+
 
         when(repository.createCustomer(createCustomerInput)).thenReturn(createCustomerOutput);
 
@@ -57,21 +66,11 @@ class CustomerServiceImplTest {
         verify(repository, times(1)).createCustomer(createCustomerInput);
 
         // Проверяем, что другие методы не вызывались...
-        verify(repository, times(0)).getCustomers();
-    }
-
-    // Как не надо писать тест...
-    @Test
-    void testCreateCustomerWithNullArgument_Wrong() {
-        try {
-            customerService.createCustomer(null);
-        } catch (IllegalArgumentException ex) {
-            assertEquals("Argument 'customer' is null.", ex.getMessage());
-        }
+        verify(repository, times(1)).getCustomers();
     }
 
     @Test
-    void testCreateCustomerWithNullArgument_Right() {
+    void testCreateCustomerWithNullArgument() {
         // act-assert
         Exception exception = assertThrows(IllegalArgumentException.class, () ->
                 customerService.createCustomer(null));
@@ -79,17 +78,81 @@ class CustomerServiceImplTest {
     }
 
     @Test
-    void testCreateCustomerWithShortPassword() {
+    void testCreateCustomerWithEasyPassword() {
         // arrange
-        CustomerPojo createCustomerInput = new CustomerPojo();
-        createCustomerInput.firstName = "John";
-        createCustomerInput.lastName = "Wick";
-        createCustomerInput.login = "john_wick@example.com";
         createCustomerInput.pass = "123qwe";
-        createCustomerInput.balance = 0;
 
         // act-assert
         Exception exception = assertThrows(IllegalArgumentException.class, () -> customerService.createCustomer(createCustomerInput));
         assertEquals("Password is very easy.", exception.getMessage());
     }
+
+    @Test
+    void testCreateCustomerWithNullPassword() {
+        // arrange
+        createCustomerInput.pass = null;
+
+        // act-assert
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> customerService.createCustomer(createCustomerInput));
+        assertEquals("Field 'customer.pass' is null.", exception.getMessage());
+    }
+
+    @Test
+    void testCreateCustomerWithWrongPassword() {
+        // arrange
+        createCustomerInput.pass = "";
+
+        // act-assert
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> customerService.createCustomer(createCustomerInput));
+        assertEquals("Password's length should be more or equal 6 symbols and less or equal 12 symbols.", exception.getMessage());
+    }
+
+    @Test
+    void testCreateCustomerWithUsedLogin() {
+        Set<CustomerPojo> list= new HashSet<>();
+        list.add(createCustomerInput);
+        when(customerService.getCustomers()).thenReturn(list);
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> customerService.createCustomer(createCustomerInput));
+        assertEquals("Login already used.", exception.getMessage());
+    }
+
+    @Test
+    void testGetCustomers() {
+        Set<CustomerPojo> list= new HashSet<>();
+        list.add(createCustomerInput);
+        when(customerService.getCustomers()).thenReturn(list);
+        assertEquals(customerService.getCustomers().size(),list.size());
+    }
+    @Test
+    void testGetCustomersIds(){
+        Set <UUID> list= new HashSet<UUID>();
+        UUID temp = new UUID(1,1);
+        list.add(temp);
+        when(customerService.getCustomerIds()).thenReturn(list);
+        assertEquals(customerService.getCustomerIds().size(),list.size());
+    }
+    @Test
+    void testGetCustomer(){
+        UUID temp = new UUID(1,1);
+        createCustomerInput.id=temp;
+        when(customerService.getCustomer(createCustomerInput.id)).thenReturn(createCustomerInput);
+        assertEquals(customerService.getCustomer(createCustomerInput.id),createCustomerInput);
+    }
+    @Test
+    void testLookupCustomerByLogin(){
+        Set<CustomerPojo> list= new HashSet<>();
+        list.add(createCustomerInput);
+        when(customerService.getCustomers()).thenReturn(list);
+        assertEquals(customerService.lookupCustomer(createCustomerInput.login),createCustomerInput);
+    }
+    @Test
+    void testLookupCustomerById(){
+        UUID temp = new UUID(1,1);
+        createCustomerInput.id=temp;
+        Set<CustomerPojo> set= new HashSet<>();
+        set.add(createCustomerInput);
+        when(customerService.getCustomers()).thenReturn(set);
+        assertEquals(customerService.lookupCustomer(createCustomerInput.id),createCustomerInput);
+    }
+
 }
