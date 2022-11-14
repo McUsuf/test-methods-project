@@ -2,7 +2,9 @@ package org.nsu.fit.tm_backend.impl;
 
 import java.util.*;
 
+import jdk.nashorn.internal.ir.annotations.Ignore;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -15,6 +17,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.nsu.fit.tm_backend.repository.Repository;
 import org.nsu.fit.tm_backend.repository.data.CustomerPojo;
 import org.nsu.fit.tm_backend.service.impl.CustomerServiceImpl;
+import org.nsu.fit.tm_backend.service.impl.auth.data.AuthenticatedUserDetails;
+import org.nsu.fit.tm_backend.shared.Authority;
+import org.nsu.fit.tm_backend.shared.Globals;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -30,6 +35,11 @@ class CustomerServiceImplTest {
 
     CustomerPojo createCustomerInput;
     CustomerPojo createCustomerOutput;
+    private static final String USER_ID = "1235";
+    private static final String USER_LOGIN = "john_wick@example.com";
+    private static final Set <String> AUTHORITIES_ADMIN = Collections.singleton(Authority.ADMIN_ROLE);
+    private static final Set <String> AUTHORITIES_CUSTOMER = Collections.singleton(Authority.CUSTOMER_ROLE);
+
 
     @BeforeEach
     public void initEach(){
@@ -49,10 +59,38 @@ class CustomerServiceImplTest {
         createCustomerOutput.balance = 0;
     }
 
+    private CustomerPojo getCustomerPojo(){
+        final CustomerPojo customerPojo = new CustomerPojo();
+        customerPojo.firstName = "John";
+        customerPojo.lastName = "Wick";
+        customerPojo.login = USER_LOGIN;
+        customerPojo.pass = "Baba_Jaga";
+        customerPojo.balance = 0;
+
+        return customerPojo;
+    }
+    private CustomerPojo getCustomerPojoWithId(){
+        final CustomerPojo customerPojo = getCustomerPojo();
+        customerPojo.id = UUID.randomUUID();
+
+        return customerPojo;
+    }
+    private CustomerPojo cloneCustomerPojo(CustomerPojo customerPojo){
+        final CustomerPojo newCustomerPojo = new CustomerPojo();
+
+        newCustomerPojo.id = customerPojo.getId();
+        newCustomerPojo.firstName = customerPojo.getFirstName();
+        newCustomerPojo.lastName = customerPojo.getLastName();
+        newCustomerPojo.login = customerPojo.getLogin();
+        newCustomerPojo.pass = customerPojo.getPass();
+        newCustomerPojo.balance = customerPojo.getBalance();
+
+        return newCustomerPojo;
+    }
+
     @Test
     void testCreateCustomer() {
         // arrange: готовим входные аргументы и настраиваем mock'и.
-
 
         when(repository.createCustomer(createCustomerInput)).thenReturn(createCustomerOutput);
 
@@ -117,6 +155,104 @@ class CustomerServiceImplTest {
     }
 
     @Test
+    @DisplayName("Get login with admin authority")
+    void testMeWithAdminAuthority() {
+       final AuthenticatedUserDetails authenticatedUserDetails = new AuthenticatedUserDetails(
+               USER_ID, USER_LOGIN, AUTHORITIES_ADMIN);
+
+       assertEquals( Globals.ADMIN_LOGIN, customerService.me(authenticatedUserDetails).getLogin());
+    }
+
+    @Test
+    @DisplayName("Get customer info without admin authority")
+    void testMeWithoutAdminAuthority() {
+        final AuthenticatedUserDetails authenticatedUserDetails = new AuthenticatedUserDetails(
+                USER_ID, USER_LOGIN, AUTHORITIES_CUSTOMER);
+        final CustomerPojo customerPojo = getCustomerPojoWithId();
+
+        Mockito.when(repository.getCustomerByLogin(USER_LOGIN)).thenReturn(customerPojo);
+
+        assertEquals(customerPojo, customerService.me(authenticatedUserDetails));
+        Mockito.verify(repository).getCustomerByLogin(USER_LOGIN);
+    }
+
+    @Test
+    @DisplayName("Delete customer from repo")
+    void testDeleteCustomer(){
+        final CustomerPojo customerPojo = getCustomerPojoWithId();
+        doNothing().when(repository).deleteCustomer(customerPojo.id);
+        customerService.deleteCustomer(customerPojo.id);
+        Mockito.verify(repository, times(1)).deleteCustomer(customerPojo.id);
+    }
+
+    @Test
+    @DisplayName("Delete customer from repo without id")
+    void testDeleteCustomerWithoutId(){
+        final CustomerPojo customerPojo = getCustomerPojo();
+
+        Exception exception = assertThrows(IllegalArgumentException.class, () ->
+                customerService.deleteCustomer(customerPojo.id));
+        assertEquals("Argument 'customer id' is null.", exception.getMessage());
+
+        Mockito.verify(repository, never()).deleteCustomer(customerPojo.id);
+    }
+
+    @Test
+    @DisplayName("Raise customer balance")
+    void testTopUpBalance(){
+        final CustomerPojo customerPojo = getCustomerPojoWithId();
+        //customerPojo не имеет интерфейса Cloneable :(
+        final CustomerPojo customerPojoUpdated = cloneCustomerPojo(customerPojo);
+        final Random random = new Random();
+        //Сдвигаем диапазон рандома вправо на 1 и не допускаем переполнения баланса пользователя
+        final int money = random.nextInt(Integer.MAX_VALUE - (customerPojo.balance + 1)) + 1;
+
+        Mockito.when(repository.getCustomer(customerPojo.id)).thenReturn(customerPojo);
+        doNothing().when(repository).editCustomer(customerPojo);
+
+        customerPojoUpdated.balance = customerPojo.getBalance() + money;
+        assertEquals(customerPojoUpdated, customerService.topUpBalance(customerPojo.id, money));
+
+        Mockito.verify(repository, times(1)).editCustomer(customerPojo);
+    }
+
+    @Test
+    @DisplayName("Raise customer balance but plus 0")
+    void testTopUpBalanceWithZero(){
+        final CustomerPojo customerPojo = getCustomerPojoWithId();
+        final int money = 0;
+
+        Mockito.when(repository.getCustomer(customerPojo.id)).thenReturn(customerPojo);
+        doNothing().when(repository).editCustomer(customerPojo);
+
+        Exception exception = assertThrows(IllegalArgumentException.class, () ->
+                customerService.topUpBalance(customerPojo.id, money));
+        assertEquals("Argument 'money' must be more than 0", exception.getMessage());
+        Mockito.verify(repository, never()).editCustomer(customerPojo);
+    }
+
+    @Test
+    @DisplayName("Raise customer balance but plus negative num")
+    void testTopUpBalanceWithNegative(){
+        final CustomerPojo customerPojo = getCustomerPojoWithId();
+
+        final Random random = new Random();
+        final int money =  random.ints(Integer.MIN_VALUE, 0).findFirst().getAsInt();;
+
+        Mockito.when(repository.getCustomer(customerPojo.id)).thenReturn(customerPojo);
+        doNothing().when(repository).editCustomer(customerPojo);
+
+        Exception exception = assertThrows(IllegalArgumentException.class, () ->
+                customerService.topUpBalance(customerPojo.id, money));
+        assertEquals("Argument 'money' must be more than 0", exception.getMessage());
+        Mockito.verify(repository, never()).editCustomer(customerPojo);
+    }
+
+    @AfterEach
+    void verifyNoMoreInteractions(){
+        Mockito.verifyNoMoreInteractions(repository);
+    }
+    @Test
     void testGetCustomers() {
         Set<CustomerPojo> list= new HashSet<>();
         list.add(createCustomerInput);
@@ -154,5 +290,4 @@ class CustomerServiceImplTest {
         when(customerService.getCustomers()).thenReturn(set);
         assertEquals(customerService.lookupCustomer(createCustomerInput.id),createCustomerInput);
     }
-
 }
