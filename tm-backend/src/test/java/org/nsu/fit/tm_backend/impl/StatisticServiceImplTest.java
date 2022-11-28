@@ -28,8 +28,6 @@ import java.util.*;
 // calculate(UUID customerId) чтобы использовать стратегию "разделяй и властвуй".
 @ExtendWith(MockitoExtension.class)
 public class StatisticServiceImplTest {
-    @Mock
-    private Repository repository;
 
     @InjectMocks
     private StatisticServiceImpl statisticService;
@@ -100,7 +98,7 @@ public class StatisticServiceImplTest {
                 }
         );
         Mockito.when(subscriptionService.getSubscriptions(customerUuid)).thenReturn(subscriptionPojos);
-        Assertions.assertEquals(statisticService.calculate(customerPojo.id),statisticPerCustomerBO);
+        Assertions.assertEquals(statisticPerCustomerBO, statisticService.calculate(customerPojo.id));
     }
 
     @Test
@@ -113,7 +111,7 @@ public class StatisticServiceImplTest {
                 }
         );
         StatisticPerCustomerBO statisticPerCustomerBO=null;
-        Assertions.assertEquals(statisticService.calculate(customerPojo.id),statisticPerCustomerBO);
+        Assertions.assertEquals(statisticPerCustomerBO, statisticService.calculate(customerPojo.id));
     }
     @Test
     void TestCalculateWithoutId(){
@@ -127,7 +125,7 @@ public class StatisticServiceImplTest {
                 }
         );
         Mockito.when(subscriptionService.getSubscriptions(customerUuid)).thenReturn(subscriptionPojos);
-        Assertions.assertEquals(statisticService.calculate(),statisticBO);
+        Assertions.assertEquals(statisticBO, statisticService.calculate());
     }
     @Test
     void testCalculateWithoutIdWhereCustomerIsNull(){
@@ -143,6 +141,6 @@ public class StatisticServiceImplTest {
         statisticService=Mockito.spy(statisticService);
         Mockito.when(customerService.getCustomerIds()).thenReturn(customersUuids);
 
-        Assertions.assertEquals(statisticService.calculate(),statisticBO);
+        Assertions.assertEquals(statisticBO, statisticService.calculate());
     }
 }
