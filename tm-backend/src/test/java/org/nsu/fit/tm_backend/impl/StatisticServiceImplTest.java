@@ -105,7 +105,6 @@ public class StatisticServiceImplTest {
 
     @Test
     void testCalculateWithIdWhereCustomerIsNull(){
-        statisticService=Mockito.spy(statisticService);
         Mockito.when(customerService.lookupCustomer(customerUuid)).thenAnswer(
                 (Answer) invocation -> {
                     Object[] args = invocation.getArguments();
